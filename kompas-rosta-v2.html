@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Компас роста — HR-инструмент</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:#ffffff; --bg2:#f7f6f3; --bg3:#f0efe9;
+    --border:rgba(0,0,0,0.12); --border2:rgba(0,0,0,0.22);
+    --text:#1a1a18; --text2:#5f5e5a; --text3:#8f8e89;
+    --purple:#7F77DD; --purple-dark:#534AB7; --purple-light:#EEEDFE; --purple-text:#3C3489;
+    --teal:#1D9E75; --teal-light:#E1F5EE; --teal-text:#085041;
+    --amber:#EF9F27; --amber-light:#FAEEDA; --amber-text:#633806;
+    --gray-light:#F1EFE8; --gray-text:#444441;
+    --r-md:8px; --r-lg:12px;
+  }
+  @media (prefers-color-scheme:dark) {
+    :root {
+      --bg:#1e1e1c; --bg2:#2a2a27; --bg3:#232320;
+      --border:rgba(255,255,255,0.12); --border2:rgba(255,255,255,0.22);
+      --text:#f0efe9; --text2:#a8a79f; --text3:#6e6d67;
+      --purple-light:#26215C; --purple-text:#CECBF6;
+      --teal-light:#04342C; --teal-text:#9FE1CB;
+      --amber-light:#412402; --amber-text:#FAC775;
+      --gray-light:#2C2C2A; --gray-text:#D3D1C7;
+    }
+  }
+  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg3); color:var(--text); font-size:15px; min-height:100vh; padding:2rem 1rem; }
+  .page { max-width:860px; margin:0 auto; }
+
+  .header { display:flex; align-items:center; gap:14px; margin-bottom:1.5rem; padding-bottom:1.25rem; border-bottom:0.5px solid var(--border); }
+  .compass-icon { width:40px; height:40px; border-radius:50%; background:var(--purple-light); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .compass-icon svg { width:22px; height:22px; }
+  h1 { font-size:20px; font-weight:600; }
+  .header p { font-size:13px; color:var(--text2); margin-top:2px; }
+
+  .key-block { background:var(--bg); border:0.5px solid var(--border); border-radius:var(--r-lg); padding:1rem 1.25rem; margin-bottom:14px; transition:border-color .15s; }
+  .key-block.ok { border-color:var(--teal); }
+  .key-block.bad { border-color:#E24B4A; }
+  .key-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; flex-wrap:wrap; gap:6px; }
+  .key-label { font-size:11px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; color:var(--text2); display:flex; align-items:center; gap:6px; }
+  .key-hint { font-size:12px; color:var(--text3); }
+  .key-hint a { color:var(--purple); text-decoration:none; }
+  .key-hint a:hover { text-decoration:underline; }
+  .key-row { display:flex; gap:8px; }
+  .key-input { flex:1; border:0.5px solid var(--border2); border-radius:var(--r-md); padding:9px 12px; font-size:13px; font-family:inherit; color:var(--text); background:var(--bg2); outline:none; letter-spacing:.4px; transition:border-color .15s; }
+  .key-input:focus { border-color:var(--purple); }
+  .key-input::placeholder { letter-spacing:0; color:var(--text3); }
+  .btn-sm { background:none; border:0.5px solid var(--border2); border-radius:var(--r-md); padding:8px 12px; font-size:12px; color:var(--text2); cursor:pointer; font-family:inherit; white-space:nowrap; transition:background .12s; }
+  .btn-sm:hover { background:var(--bg2); }
+  .key-status { font-size:12px; margin-top:7px; min-height:16px; display:flex; align-items:center; gap:5px; }
+  .sdot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+  .key-privacy { font-size:11px; color:var(--text3); margin-top:7px; padding-top:7px; border-top:0.5px solid var(--border); line-height:1.5; }
+
+  .fields { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:14px; }
+  @media(max-width:640px) { .fields { grid-template-columns:1fr; } }
+  .field-card { background:var(--bg); border:0.5px solid var(--border); border-radius:var(--r-lg); padding:1rem; }
+  .flabel { font-size:11px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; color:var(--text2); margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+  .dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+  .dp { background:var(--purple); } .dt { background:var(--teal); } .dc { background:var(--amber); }
+  textarea { width:100%; min-height:150px; resize:vertical; border:0.5px solid var(--border2); border-radius:var(--r-md); padding:9px 11px; font-size:13px; font-family:inherit; color:var(--text); background:var(--bg2); line-height:1.65; outline:none; transition:border-color .15s; }
+  textarea:focus { border-color:var(--purple); }
+  textarea::placeholder { color:var(--text3); }
+
+  .cta { display:flex; justify-content:center; margin:2px 0 1.5rem; }
+  .btn-main { background:var(--purple); color:#fff; border:none; border-radius:var(--r-md); padding:11px 40px; font-size:14px; font-weight:600; font-family:inherit; cursor:pointer; transition:background .15s; }
+  .btn-main:hover { background:var(--purple-dark); }
+  .btn-main:disabled { opacity:.5; cursor:default; }
+
+  .spin { display:none; align-items:center; gap:10px; justify-content:center; padding:2.5rem; color:var(--text2); font-size:13px; }
+  .sd { width:6px; height:6px; border-radius:50%; background:var(--purple); animation:blink 1.2s ease-in-out infinite; }
+  .sd:nth-child(2){animation-delay:.2s} .sd:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,100%{opacity:.2}50%{opacity:1}}
+
+  .err { display:none; text-align:center; padding:.75rem 1rem; font-size:13px; color:#A32D2D; background:#FCEBEB; border-radius:var(--r-md); margin-bottom:1rem; }
+  .results { display:none; }
+  .slabel { font-size:11px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; color:var(--text2); margin:1.5rem 0 .75rem; }
+
+  .result-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start; }
+  @media(max-width:640px){ .result-grid { grid-template-columns:1fr; } }
+  .radar-wrap, .review-card { background:var(--bg); border:0.5px solid var(--border); border-radius:var(--r-lg); padding:1rem; }
+  .radar-title { font-size:13px; font-weight:600; margin-bottom:2px; }
+  .radar-sub { font-size:12px; color:var(--text2); margin-bottom:.75rem; }
+  .chart-area { position:relative; width:100%; height:260px; }
+  .legend { display:flex; gap:14px; margin-top:.5rem; font-size:11px; color:var(--text2); }
+  .legend span { display:flex; align-items:center; gap:5px; }
+  .lsq { width:10px; height:4px; border-radius:2px; flex-shrink:0; }
+
+  .rev-score-row { display:flex; align-items:baseline; gap:8px; margin-bottom:.875rem; }
+  .rev-score { font-size:36px; font-weight:700; }
+  .rev-max { font-size:15px; color:var(--text2); }
+  .rev-lbl { font-size:12px; color:var(--text2); }
+  .dim-row { margin-bottom:12px; }
+  .dim-header { display:flex; justify-content:space-between; margin-bottom:4px; font-size:13px; }
+  .dim-val { font-weight:600; }
+  .bbar { width:100%; height:7px; background:var(--bg2); border-radius:4px; overflow:hidden; }
+  .bfill { height:100%; border-radius:4px; }
+  .dim-comment { font-size:11px; color:var(--text3); margin-top:3px; }
+  .verdict { margin-top:.875rem; padding:.75rem; background:var(--bg2); border-radius:var(--r-md); font-size:13px; color:var(--text2); line-height:1.6; }
+
+  .roadmap-cards { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  @media(max-width:640px){ .roadmap-cards { grid-template-columns:1fr; } }
+  .rcard { background:var(--bg); border:0.5px solid var(--border); border-radius:var(--r-lg); padding:.875rem; }
+  .pbadge { display:inline-block; font-size:11px; font-weight:600; padding:2px 9px; border-radius:20px; margin-bottom:8px; }
+  .pb1{background:var(--purple-light);color:var(--purple-text)} .pb2{background:var(--teal-light);color:var(--teal-text)} .pb3{background:var(--gray-light);color:var(--gray-text)}
+  .rdir { font-size:13px; font-weight:600; margin-bottom:4px; }
+  .rfmt { font-size:12px; color:var(--text2); line-height:1.55; }
+  .rimp { font-size:11px; color:var(--text3); margin-top:8px; padding-top:8px; border-top:0.5px solid var(--border); line-height:1.45; }
+
+  .reset-row { display:flex; justify-content:center; margin-top:1.5rem; }
+  .btn-ghost { background:none; border:0.5px solid var(--border2); border-radius:var(--r-md); padding:7px 20px; font-size:12.5px; color:var(--text2); cursor:pointer; font-family:inherit; transition:background .12s; }
+  .btn-ghost:hover { background:var(--bg2); }
+
+  .footer { margin-top:2.5rem; padding-top:1rem; border-top:0.5px solid var(--border); font-size:12px; color:var(--text3); text-align:center; line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <div class="compass-icon">
+      <svg viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="9" stroke="#7F77DD" stroke-width="1.5"/>
+        <path d="M12 4v1.5M12 18.5V20M4 12h1.5M18.5 12H20" stroke="#AFA9EC" stroke-width="1.3" stroke-linecap="round"/>
+        <path d="M12 7.5l2 6-2-1.8-2 1.8 2-6z" fill="#7F77DD"/>
+        <circle cx="12" cy="12" r="1.1" fill="#3C3489"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Компас роста</h1>
+      <p>Инструмент для HR, HRD и T&D — радар совместимости сотрудника с проектом и маршрут развития</p>
+    </div>
+  </div>
+
+  <div class="key-block" id="keyBlock">
+    <div class="key-top">
+      <div class="key-label"><span class="dot dp"></span>Ваш API-ключ Google Gemini</div>
+      <div class="key-hint">Бесплатно на <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com</a> → Get API key</div>
+    </div>
+    <div class="key-row">
+      <input class="key-input" id="apiKey" type="password"
+        placeholder="Вставьте ключ — AIzaSy..."
+        oninput="onKeyInput()" autocomplete="off" spellcheck="false">
+      <button class="btn-sm" onclick="toggleKey()">Показать</button>
+    </div>
+    <div class="key-status" id="keyStatus"></div>
+    <div class="key-privacy">
+      Ключ работает только в вашем браузере — он не отправляется нам и нигде не сохраняется.
+      Бесплатный лимит Google: 1500 расчётов в день на один ключ.
+    </div>
+  </div>
+
+  <div class="fields">
+    <div class="field-card">
+      <div class="flabel"><span class="dot dp"></span>Проекты компании</div>
+      <textarea id="f-projects" placeholder="Опишите проекты и нужные компетенции:
+
+Проект AI-платформа — ML, Python, аналитика, коммуникация с бизнесом
+Проект CRM — React, UX, управление командой
+Проект APAC — маркетинг, переговоры, аналитика рынка"></textarea>
+    </div>
+    <div class="field-card">
+      <div class="flabel"><span class="dot dt"></span>OKR команды</div>
+      <textarea id="f-okr" placeholder="Цели и ключевые результаты:
+
+O1: Запустить AI-продукт в Q3
+KR1: MVP за 3 месяца
+KR2: 5 пилотных клиентов
+
+O2: Повысить retention команды
+KR1: eNPS выше 70"></textarea>
+    </div>
+    <div class="field-card">
+      <div class="flabel"><span class="dot dc"></span>Профиль сотрудника</div>
+      <textarea id="f-employee" placeholder="Навыки, опыт, цели:
+
+Анна, Senior Analyst, 4 года
+Навыки: Python, SQL, Tableau, базовый ML
+Достижения: +18% конверсия, автоматизация отчётности
+Хочет: продуктовую аналитику или ML-трек
+Сильные стороны: коммуникация, системное мышление"></textarea>
+    </div>
+  </div>
+
+  <div class="cta"><button class="btn-main" id="btn" onclick="run()">Рассчитать совместимость</button></div>
+
+  <div class="spin" id="spin"><div class="sd"></div><div class="sd"></div><div class="sd"></div><span>Компас калибруется...</span></div>
+  <div class="err" id="err"></div>
+  <div class="results" id="results"></div>
+
+  <div class="footer">Данные не сохраняются и не передаются третьим лицам · Ключ хранится только в памяти вашей вкладки</div>
+</div>
+
+<script>
+let radarChart = null;
+let keyVisible = false;
+
+function toggleKey() {
+  const inp = document.getElementById('apiKey');
+  keyVisible = !keyVisible;
+  inp.type = keyVisible ? 'text' : 'password';
+  inp.nextElementSibling.textContent = keyVisible ? 'Скрыть' : 'Показать';
+}
+
+function onKeyInput() {
+  const key = document.getElementById('apiKey').value.trim();
+  const block = document.getElementById('keyBlock');
+  const status = document.getElementById('keyStatus');
+  block.classList.remove('ok','bad');
+  if (!key) { status.innerHTML = ''; return; }
+  if (key.startsWith('AIza') && key.length > 20) {
+    block.classList.add('ok');
+    status.innerHTML = '<span class="sdot" style="background:#1D9E75"></span><span style="color:#0F6E56">Ключ принят — можно делать расчёты</span>';
+  } else {
+    block.classList.add('bad');
+    status.innerHTML = '<span class="sdot" style="background:#E24B4A"></span><span style="color:#A32D2D">Похоже, ключ некорректный — он должен начинаться с AIza</span>';
+  }
+}
+
+function showErr(msg) {
+  const el = document.getElementById('err');
+  el.textContent = msg;
+  el.style.display = 'block';
+  document.getElementById('spin').style.display = 'none';
+  document.getElementById('btn').disabled = false;
+}
+
+function scoreColor(s) {
+  if (s >= 75) return '#1D9E75';
+  if (s >= 50) return '#7F77DD';
+  return '#EF9F27';
+}
+
+function extractJSON(t) {
+  const s = t.indexOf('{'), e = t.lastIndexOf('}');
+  return (s === -1 || e === -1) ? null : t.slice(s, e+1);
+}
+
+function safeParse(t) {
+  const raw = extractJSON(t);
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch(_) {
+    try { return JSON.parse(raw.replace(/[\x00-\x1F\x7F]/g,' ').replace(/,(\s*[}\]])/g,'$1')); }
+    catch(_) { return null; }
+  }
+}
+
+async function run() {
+  const key = document.getElementById('apiKey').value.trim();
+  if (!key || !key.startsWith('AIza')) {
+    showErr('Вставьте API-ключ в поле выше. Получить бесплатно: aistudio.google.com/apikey → Get API key');
+    return;
+  }
+  const p = document.getElementById('f-projects').value.trim();
+  const o = document.getElementById('f-okr').value.trim();
+  const e = document.getElementById('f-employee').value.trim();
+  if (!p || !e) { showErr('Заполните поля «Проекты компании» и «Профиль сотрудника»'); return; }
+
+  document.getElementById('btn').disabled = true;
+  document.getElementById('spin').style.display = 'flex';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('err').style.display = 'none';
+
+  const prompt = `Ты HR-аналитик. Верни ТОЛЬКО валидный JSON без markdown и пояснений.
+
+ПРОЕКТЫ КОМПАНИИ: ${p}
+OKR КОМАНДЫ: ${o || 'не указаны'}
+ПРОФИЛЬ СОТРУДНИКА: ${e}
+
+JSON-схема (все числа целые, строки без кавычек внутри):
+{
+  "name": "имя сотрудника",
+  "top_project": "название лучшего проекта",
+  "overall_score": 75,
+  "verdict": "Общая оценка совместимости в 2-3 предложениях",
+  "radar": [
+    {"axis": "Python", "employee": 7, "required": 9},
+    {"axis": "ML", "employee": 4, "required": 8},
+    {"axis": "Коммуникация", "employee": 8, "required": 7},
+    {"axis": "Аналитика", "employee": 9, "required": 8},
+    {"axis": "Лидерство", "employee": 5, "required": 6}
+  ],
+  "dimensions": [
+    {"name": "Технические навыки", "score": 70, "comment": "Одно предложение"},
+    {"name": "Коммуникация", "score": 85, "comment": "Одно предложение"},
+    {"name": "Стратегическое мышление", "score": 65, "comment": "Одно предложение"},
+    {"name": "Потенциал роста", "score": 80, "comment": "Одно предложение"}
+  ],
+  "roadmap": [
+    {"direction": "Направление 1", "format": "Формат обучения", "impact": "Влияние на проект и OKR"},
+    {"direction": "Направление 2", "format": "Формат обучения", "impact": "Влияние на проект и OKR"},
+    {"direction": "Направление 3", "format": "Формат обучения", "impact": "Влияние на проект и OKR"}
+  ]
+}
+Адаптируй все значения под реальные данные. Только JSON.`;
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+      { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig:{temperature:0.3,maxOutputTokens:1500} }) }
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(()=>({}));
+      const msg = err?.error?.message || '';
+      if (res.status === 400) showErr('Ключ недействителен. Проверьте его на aistudio.google.com/apikey');
+      else if (res.status === 429) showErr('Превышен лимит запросов. Подождите минуту и попробуйте снова.');
+      else showErr('Ошибка API (' + res.status + '). ' + (msg || 'Попробуйте ещё раз.'));
+      return;
+    }
+    const data = await res.json();
+    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const parsed = safeParse(raw);
+    if (!parsed) { showErr('Не удалось разобрать ответ. Попробуйте убрать кавычки и спецсимволы из полей.'); return; }
+    render(parsed);
+  } catch(_) {
+    showErr('Ошибка соединения. Проверьте интернет и попробуйте ещё раз.');
+  }
+  document.getElementById('spin').style.display = 'none';
+  document.getElementById('btn').disabled = false;
+}
+
+function render(d) {
+  const el = document.getElementById('results');
+  const overall = Math.round(d.overall_score || 0);
+  const name = d.name || 'Сотрудник';
+
+  let html = `<div class="slabel">Радар совместимости — ${name} × ${d.top_project || 'проект'}</div>`;
+  html += `<div class="result-grid">`;
+  html += `<div class="radar-wrap">
+    <div class="radar-title">Профиль компетенций</div>
+    <div class="radar-sub">Текущий уровень vs требования проекта</div>
+    <div class="chart-area"><canvas id="radarCanvas"></canvas></div>
+    <div class="legend">
+      <span><span class="lsq" style="background:#7F77DD"></span>Сотрудник</span>
+      <span><span class="lsq" style="background:#AFA9EC"></span>Требуется</span>
+    </div>
+  </div>`;
+
+  html += `<div class="review-card">
+    <div class="slabel" style="margin-top:0">Performance review</div>
+    <div class="rev-score-row">
+      <span class="rev-score" style="color:${scoreColor(overall)}">${overall}</span>
+      <span class="rev-max">/ 100</span>
+      <span class="rev-lbl">совместимость</span>
+    </div>`;
+  (d.dimensions||[]).forEach(dim => {
+    const sc = Math.round(dim.score||0);
+    html += `<div class="dim-row">
+      <div class="dim-header"><span>${dim.name}</span><span class="dim-val" style="color:${scoreColor(sc)}">${sc}</span></div>
+      <div class="bbar"><div class="bfill" style="width:${sc}%;background:${scoreColor(sc)}"></div></div>
+      <div class="dim-comment">${dim.comment||''}</div>
+    </div>`;
+  });
+  html += `<div class="verdict">${d.verdict||''}</div></div></div>`;
+
+  html += `<div class="slabel">Маршрут развития</div><div class="roadmap-cards">`;
+  ['pb1','pb2','pb3'].forEach((cls,i) => {
+    const r = (d.roadmap||[])[i]; if (!r) return;
+    html += `<div class="rcard">
+      <span class="pbadge ${cls}">Приоритет ${i+1}</span>
+      <div class="rdir">${r.direction}</div>
+      <div class="rfmt">${r.format}</div>
+      <div class="rimp">${r.impact}</div>
+    </div>`;
+  });
+  html += `</div>`;
+  html += `<div class="reset-row"><button class="btn-ghost" onclick="reset()">Рассчитать для другого сотрудника</button></div>`;
+
+  el.innerHTML = html;
+  el.style.display = 'block';
+
+  if (radarChart) { radarChart.destroy(); radarChart = null; }
+  const axes = d.radar||[];
+  if (axes.length) {
+    const isDark = window.matchMedia('(prefers-color-scheme:dark)').matches;
+    const gc = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)';
+    const lc = isDark ? '#a8a79f' : '#5f5e5a';
+    radarChart = new Chart(document.getElementById('radarCanvas'), {
+      type:'radar',
+      data:{ labels:axes.map(a=>a.axis), datasets:[
+        {label:'Сотрудник',data:axes.map(a=>Math.round(a.employee||0)),backgroundColor:'rgba(127,119,221,0.15)',borderColor:'#7F77DD',borderWidth:2,pointBackgroundColor:'#7F77DD',pointRadius:4},
+        {label:'Требуется',data:axes.map(a=>Math.round(a.required||0)),backgroundColor:'rgba(175,169,236,0.08)',borderColor:'#AFA9EC',borderWidth:1.5,pointBackgroundColor:'#AFA9EC',pointRadius:3,borderDash:[4,3]}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{r:{min:0,max:10,ticks:{stepSize:2,font:{size:10},color:lc,backdropColor:'transparent'},grid:{color:gc},pointLabels:{font:{size:11.5},color:lc}}}}
+    });
+  }
+}
+
+function reset() {
+  document.getElementById('f-employee').value = '';
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('err').style.display = 'none';
+  if (radarChart) { radarChart.destroy(); radarChart = null; }
+  document.getElementById('f-employee').focus();
+}
+</script>
+</body>
+</html>
