@@ -55,7 +55,7 @@
   .sdot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
   .key-privacy { font-size:11px; color:var(--text3); margin-top:7px; padding-top:7px; border-top:0.5px solid var(--border); line-height:1.5; }
 
-  .fields { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:14px; }
+  .fields { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
   @media(max-width:640px) { .fields { grid-template-columns:1fr; } }
   .field-card { background:var(--bg); border:0.5px solid var(--border); border-radius:var(--r-lg); padding:1rem; }
   .flabel { font-size:11px; font-weight:600; letter-spacing:.5px; text-transform:uppercase; color:var(--text2); margin-bottom:8px; display:flex; align-items:center; gap:6px; }
@@ -182,6 +182,16 @@ KR1: eNPS выше 70"></textarea>
 Достижения: +18% конверсия, автоматизация отчётности
 Хочет: продуктовую аналитику или ML-трек
 Сильные стороны: коммуникация, системное мышление"></textarea>
+    </div>
+    <div class="field-card">
+      <div class="flabel"><span class="dot" style="background:#D4537E"></span>Ограничения обучения</div>
+      <textarea id="f-constraints" placeholder="Бюджет, время, формат, особенности:
+
+Бюджет: до 30 000 руб.
+Время: не более 4 часов в неделю
+Формат: без отрыва от работы
+Самостоятельность: низкая, нужен контроль
+Дедлайн: результат нужен через 2 месяца"></textarea>
     </div>
   </div>
 
@@ -323,8 +333,13 @@ Key Results
 2–3 итераций → 1 итерация
 доля задач, "зависающих" > 3 дней, ↓ на 60%`;
 
+  document.getElementById('f-constraints').value = `Бюджет: внутренние ресурсы, без внешних курсов
+Время: до 3 часов в неделю, без отрыва от работы
+Формат: разборы задач + парное программирование с тимлидом
+Самостоятельность: средняя — нужен контроль на старте
+Дедлайн: результат нужен через 6 недель (до Black Friday)`;
+
   document.getElementById('f-employee').value = `Профиль: Арсений Б.
-Общая информация:
 * Опыт: 2 года
 * Уровень: Junior–Middle Backend Developer
 * Домен: B2B системы
@@ -372,6 +387,31 @@ Key Results
 * требует целевого развития для работы с production-сервисом`;
 }
 
+async function groqCall(key, systemMsg, userMsg, maxTokens) {
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+    body: JSON.stringify({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        { role: 'system', content: systemMsg },
+        { role: 'user', content: userMsg }
+      ],
+      temperature: 0.4,
+      max_tokens: maxTokens
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(()=>({}));
+    const code = res.status;
+    if (code === 401) throw new Error('Ключ недействителен. Проверьте его на console.groq.com/keys');
+    if (code === 429) throw new Error('Превышен лимит запросов. Подождите минуту и попробуйте снова.');
+    throw new Error('Ошибка API (' + code + '). ' + (err?.error?.message || 'Попробуйте ещё раз.'));
+  }
+  const data = await res.json();
+  return data?.choices?.[0]?.message?.content || '';
+}
+
 async function run() {
   const key = document.getElementById('apiKey').value.trim();
   if (!key || !key.startsWith('gsk_')) {
@@ -381,6 +421,7 @@ async function run() {
   const p = document.getElementById('f-projects').value.trim();
   const o = document.getElementById('f-okr').value.trim();
   const e = document.getElementById('f-employee').value.trim();
+  const c = document.getElementById('f-constraints').value.trim();
   if (!p || !e) { showErr('Заполните поля «Проекты компании» и «Профиль сотрудника»'); return; }
 
   document.getElementById('btn').disabled = true;
@@ -389,61 +430,53 @@ async function run() {
   document.getElementById('err').style.display = 'none';
 
   const RADAR_AXES = ['Технические навыки','Надёжность кода','Коммуникация','Самостоятельность','Потенциал роста'];
+  const context = `ПРОЕКТЫ: ${p}\nOKR: ${o||'не указаны'}\nСОТРУДНИК: ${e}\nОГРАНИЧЕНИЯ: ${c||'не указаны'}`;
 
-  const prompt = `Верни ТОЛЬКО JSON одной строкой. Все строковые значения ОБЯЗАТЕЛЬНО в двойных кавычках.
+  const prompt1 = `Верни ТОЛЬКО JSON одной строкой. Все строки в двойных кавычках.
 
-ПРОЕКТЫ: ${p}
-OKR: ${o || 'не указаны'}
-СОТРУДНИК: ${e}
+${context}
 
-Шаблон (скопируй структуру точно, замени значения):
-{"name":"Имя Фамилия","top_project":"Название проекта","overall_score":70,"verdict":"Оценка до 15 слов","skills":[7,4,8,5,7],"scores":[65,80,55,75],"td_review":{"problem":"Текущие проблемы с метриками и симптомы. Источник данных.","cause":"Конкретные навыки которых не хватает.","solution":"Как обучать — формат и привязка к задачам.","plan":"Недельный план 4-6 недель.","effect":"Ожидаемые измеримые результаты после обучения."},"roadmap":[{"d":"Навык","f":"Формат","i":"Влияние"},{"d":"Навык","f":"Формат","i":"Влияние"},{"d":"Навык","f":"Формат","i":"Влияние"}]}
+Шаблон:
+{"name":"Имя","top_project":"Проект","overall_score":70,"verdict":"До 15 слов","skills":[7,4,8,5,7],"scores":[65,80,55,75],"roadmap":[{"d":"Навык","f":"Формат","i":"Влияние"},{"d":"Навык","f":"Формат","i":"Влияние"},{"d":"Навык","f":"Формат","i":"Влияние"}]}
 
-skills — 5 целых чисел 0-10 для: ${RADAR_AXES.join(', ')}.
-scores — 4 целых числа 0-100 для: Технические навыки, Коммуникация, Стратегия, Потенциал.
-td_review — объект с 5 полями, каждое поле — строка с конкретными деталями из данных сотрудника и проектов, с метриками и примерами из задач.
+skills — 5 чисел 0-10: ${RADAR_AXES.join(', ')}.
+scores — 4 числа 0-100: Технические навыки, Коммуникация, Стратегия, Потенциал.
+Только JSON.`;
+
+  const prompt2 = `Ты senior T&D консультант. Верни ТОЛЬКО JSON одной строкой. Все строки в двойных кавычках.
+
+${context}
+
+Сгенерируй глубокую стратегию обучения по 6 элементам. Каждый элемент — развёрнутый, конкретный, с цифрами и примерами из данных.
+
+Шаблон:
+{"case_for_change":"ПОДРОБНО: конкретные бизнес-риски с цифрами из проектов и OKR. Что происходит прямо сейчас из-за пробелов в навыках. Сколько стоит бездействие в часах/деньгах/инцидентах. Какие дедлайны горят.","vision":"ПОДРОБНО через Dream-to-be-done: кем хочет стать сотрудник, какую роль сможет закрывать через 6-12 месяцев, конкретный карьерный маршрут с этапами, целевой уровень компетенций.","value_employee":"ПОДРОБНО: что конкретно получит сотрудник — новые навыки, карьерный рост, решение реальных задач, признание. С примерами из его профиля.","value_manager":"ПОДРОБНО: что получит менеджер и команда — снижение нагрузки на senior, меньше итераций ревью, закрытие критических задач без эскалации. С цифрами.","value_business":"ПОДРОБНО: прямое влияние на OKR — какие KR закроет обучение, какие метрики улучшатся и на сколько процентов, ROI обучения.","decision_principles":"ПОДРОБНО: почему именно этот формат выбран с учётом ограничений. Какие альтернативы рассматривались и почему отклонены. Как обходим ограничения по времени и бюджету.","action_areas":"ПОДРОБНО: три зоны с тегами КРИТИЧНО/ВАЖНО/СТРАТЕГИЧЕСКИ. Для каждой — конкретные задачи из backlog, почему именно это, что разблокируется после.","success_indicators":"ПОДРОБНО: таблица метрик ДО и ПОСЛЕ с конкретными числами. Промежуточные чекпоинты по неделям. Что именно отслеживает T&D специалист и как часто. Финальный критерий успеха."}
+
 Только JSON. Никакого текста до или после.`;
 
   try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: [
-          { role: 'system', content: 'Ты HR-аналитик. Отвечай ТОЛЬКО валидным JSON одной строкой.' },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.3,
-        max_tokens: 500
-      })
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(()=>({}));
-      const msg = err?.error?.message || '';
-      if (res.status === 401) showErr('Ключ недействителен. Проверьте его на console.groq.com/keys');
-      else if (res.status === 429) showErr('Превышен лимит запросов. Подождите минуту и попробуйте снова.');
-      else showErr('Ошибка API (' + res.status + '). ' + (msg || 'Попробуйте ещё раз.'));
-      document.getElementById('spin').style.display = 'none';
-      document.getElementById('btn').disabled = false;
-      return;
-    }
-    const data = await res.json();
-    const raw = data?.choices?.[0]?.message?.content || '';
-    console.log('RAW RESPONSE:', raw);
-    const parsed = safeParse(raw);
-    if (!parsed) {
-      showErr('Не удалось разобрать ответ. Попробуйте ещё раз.');
-      document.getElementById('spin').style.display = 'none';
-      document.getElementById('btn').disabled = false;
-      return;
-    }
-    render(parsed, RADAR_AXES);
-  } catch(_) {
-    showErr('Ошибка соединения. Проверьте интернет и попробуйте ещё раз.');
+    setSpinText('Анализирую профиль и проекты...');
+    const raw1 = await groqCall(key, 'Ты HR-аналитик. Отвечай ТОЛЬКО JSON одной строкой.', prompt1, 400);
+    console.log('RAW1:', raw1);
+    const d1 = safeParse(raw1);
+    if (!d1) { showErr('Ошибка первого запроса. Попробуйте ещё раз.'); return; }
+
+    setSpinText('Формирую стратегию обучения...');
+    const raw2 = await groqCall(key, 'Ты senior T&D консультант. Отвечай ТОЛЬКО JSON одной строкой. Пиши подробно и конкретно.', prompt2, 2000);
+    console.log('RAW2:', raw2);
+    const d2 = safeParse(raw2);
+
+    render({...d1, strategy: d2 || null}, RADAR_AXES);
+  } catch(err) {
+    showErr(err.message || 'Ошибка соединения. Проверьте интернет и попробуйте ещё раз.');
   }
   document.getElementById('spin').style.display = 'none';
   document.getElementById('btn').disabled = false;
+}
+
+function setSpinText(text) {
+  const span = document.getElementById('spin').querySelector('span');
+  if (span) span.textContent = text;
 }
 
 function render(d, RADAR_AXES) {
@@ -493,41 +526,71 @@ function render(d, RADAR_AXES) {
   html += `</div>`;
   html += `<div class="reset-row"><button class="btn-ghost" onclick="reset()">Рассчитать для другого сотрудника</button></div>`;
 
-  if (d.td_review && typeof d.td_review === 'object') {
-    const sections = [
-      { num: '1', title: 'Проблема', key: 'problem' },
-      { num: '2', title: 'Причина', key: 'cause' },
-      { num: '3', title: 'Решение', key: 'solution' },
-      { num: '4', title: 'План', key: 'plan' },
-      { num: '5', title: 'Ожидаемый эффект', key: 'effect' },
+  if (d.strategy && typeof d.strategy === 'object') {
+    const s = d.strategy;
+    const blocks = [
+      { num:'1', color:'#534AB7', bg:'#EEEDFE', title:'Case for Change', sub:'Почему нужно учить сейчас', text: s.case_for_change },
+      { num:'2', color:'#0F6E56', bg:'#E1F5EE', title:'Vision', sub:'Куда ведём — через Dream-to-be-done', text: s.vision },
+      {
+        num:'3', color:'#993556', bg:'#FBEAF0', title:'Value Proposition', sub:'Ценность для каждого стейкхолдера',
+        multi: [
+          { label:'Для сотрудника', text: s.value_employee },
+          { label:'Для менеджера и команды', text: s.value_manager },
+          { label:'Для бизнеса и OKR', text: s.value_business },
+        ]
+      },
+      { num:'4', color:'#854F0B', bg:'#FAEEDA', title:'Decision Principles', sub:'Логика выбора формата с учётом ограничений', text: s.decision_principles },
+      { num:'5', color:'#185FA5', bg:'#E6F1FB', title:'Action Areas', sub:'Приоритетные зоны: критично / важно / стратегически', text: s.action_areas },
+      { num:'6', color:'#3B6D11', bg:'#EAF3DE', title:'Success Indicators', sub:'Метрики до/после, чекпоинты, что отслеживает T&D', text: s.success_indicators },
     ];
-    const sectionsHtml = sections.map(s => {
-      const text = d.td_review[s.key] || '';
-      const lines = text.split(/\n|•|\*/g).map(l => l.trim()).filter(Boolean);
-      const content = lines.length > 1
-        ? lines.map((l,i) => i === 0
-            ? `<div style="color:var(--text2);font-size:13px;margin-bottom:6px">${l}</div>`
-            : `<div style="display:flex;gap:6px;font-size:13px;color:var(--text2);margin-bottom:3px"><span style="color:var(--teal);flex-shrink:0">·</span><span>${l}</span></div>`
-          ).join('')
-        : `<div style="font-size:13px;color:var(--text2);line-height:1.65">${text}</div>`;
-      return `<div style="padding:12px 0;border-bottom:0.5px solid var(--border)">
-        <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:8px">
-          <span style="width:22px;height:22px;border-radius:50%;background:var(--purple-light);color:var(--purple-text);font-size:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${s.num}</span>
-          ${s.title}
+
+    const renderText = (text) => {
+      if (!text) return '<span style="color:var(--text3)">—</span>';
+      const lines = text.split(/\\n|\n/g).map(l => l.trim()).filter(Boolean);
+      if (lines.length <= 1) return `<div style="font-size:13px;color:var(--text2);line-height:1.7">${text}</div>`;
+      return lines.map(l => {
+        if (l.match(/^(КРИТИЧНО|ВАЖНО|СТРАТЕГИЧЕСКИ)/)) {
+          const tag = l.match(/^(КРИТИЧНО|ВАЖНО|СТРАТЕГИЧЕСКИ)/)[0];
+          const tagColor = tag==='КРИТИЧНО'?'#A32D2D':tag==='ВАЖНО'?'#854F0B':'#3B6D11';
+          const tagBg = tag==='КРИТИЧНО'?'#FCEBEB':tag==='ВАЖНО'?'#FAEEDA':'#EAF3DE';
+          return `<div style="margin:8px 0 4px"><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:${tagBg};color:${tagColor}">${tag}</span></div>`;
+        }
+        if (l.match(/^[-*•·]/)) return `<div style="display:flex;gap:6px;font-size:13px;color:var(--text2);margin-bottom:4px;line-height:1.6"><span style="color:var(--text3);flex-shrink:0;margin-top:2px">·</span><span>${l.replace(/^[-*•·]\s*/,'')}</span></div>`;
+        if (l.match(/^\d+\./)) return `<div style="font-size:13px;font-weight:500;color:var(--text);margin:8px 0 3px">${l}</div>`;
+        return `<div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:4px">${l}</div>`;
+      }).join('');
+    };
+
+    const blocksHtml = blocks.map(b => {
+      let content = '';
+      if (b.multi) {
+        content = b.multi.map(m => `
+          <div style="margin-bottom:12px;padding-bottom:12px;border-bottom:0.5px solid var(--border)">
+            <div style="font-size:11px;font-weight:600;color:${b.color};margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">${m.label}</div>
+            ${renderText(m.text)}
+          </div>`).join('');
+      } else {
+        content = renderText(b.text);
+      }
+      return `<div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--r-lg);padding:1.125rem 1.25rem;break-inside:avoid">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:10px;border-bottom:0.5px solid var(--border)">
+          <span style="width:28px;height:28px;border-radius:50%;background:${b.bg};color:${b.color};font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0">${b.num}</span>
+          <div>
+            <div style="font-size:13.5px;font-weight:600;color:var(--text)">${b.title}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:1px">${b.sub}</div>
+          </div>
         </div>
         ${content}
       </div>`;
     }).join('');
+
+
+
     html = html.replace('<div class="reset-row">', `
-    <div class="slabel" style="margin-top:1.5rem">Рекомендации T&D</div>
-    <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--r-lg);padding:.25rem 1.25rem 0">
-      ${sectionsHtml}
+    <div class="slabel" style="margin-top:1.5rem">Стратегия обучения</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1rem">
+      ${blocksHtml}
     </div>
-    <div class="reset-row">`);
-  } else if (d.td_review && typeof d.td_review === 'string') {
-    html = html.replace('<div class="reset-row">', `
-    <div class="slabel" style="margin-top:1.5rem">Рекомендации T&D</div>
-    <div style="background:var(--bg);border:0.5px solid var(--border);border-radius:var(--r-lg);padding:1rem 1.25rem;font-size:13px;line-height:1.75;color:var(--text2)">${d.td_review}</div>
     <div class="reset-row">`);
   }
 
